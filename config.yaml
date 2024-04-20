@@ -1,0 +1,9 @@
+embedding_model_name: intfloat/e5-base-v2
+collection_name: llangchain_collection
+
+small_texts: False
+db_host: localhost
+db_port: 6333
+
+openai_api_key: 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
+bot_name: DocsTalks
