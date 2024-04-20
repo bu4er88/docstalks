@@ -12,5 +12,4 @@ def load_config(config_file):
 # Example usage
 if __name__ == "__main__":
     config = load_config("config.yaml")
-    tokenizer_name = config['tokenizer_name']
-    
+    embedding_model_name = config['embedding_model_name']
