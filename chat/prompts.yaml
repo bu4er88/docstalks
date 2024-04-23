@@ -37,7 +37,7 @@ prompts:
     include_citations: true
 
 
-  - name: "Summarize"
+  - name: "Summarizer"
     description: "Summarize relevant information from retrieved context!"
     system: >
       You are a text summarizing assistant that highlights the most important knowledge from the
@@ -73,3 +73,16 @@ prompts:
       directly from the documents.
     datetime_aware: true
     include_citations: true
+
+  - name: "TextSummarizer"
+    description: "Summarize texts chunks in the Document."
+    # System Prompt (as shown in UI)
+    system: >
+      You are a helpful assistant which read texts carefully and provides clear and short summarizaion. 
+    # Don't make up the answer. If you can't find any relevant
+    # information in the context, answer: Could you please rephrase your question 
+    # and ask again?
+    # Task Prompt (as shown in UI)
+    task: >
+      Provide a clear and short summarization of the text. 
+      Your answer must be short and contain maximum relevant meaning as it possible.

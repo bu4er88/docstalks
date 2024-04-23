@@ -1,9 +1,15 @@
-embedding_model_name: intfloat/e5-base-v2
-collection_name: llangchain_collection
-
-small_texts: False
+# Qdrant Database Settings
+collection_name: small_chunk_summary_and_big_context_windows #llangchain_collection small_texts default_summaries
 db_host: localhost
 db_port: 6333
 
+# LLM Settings
 openai_api_key: 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
+
+# RAG Settings
+embedding_model_name: intfloat/e5-base-v2
+use_text_window: True
+chunk_length: 100
+
+# Retriever Settings
 bot_name: DocsTalks

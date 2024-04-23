@@ -5,6 +5,7 @@ import base64
 
 from qdrant_client.models import Distance, VectorParams, models
 from qdrant_client import QdrantClient
+from docstalks.utils import print_color
 
 
 def create_qdrant_collection(client, 
@@ -30,14 +31,14 @@ def check_collection_exists_in_qdrant(client,
     if collection_name in collections_names:
         delete = ''
         while delete not in ['Yes', 'no']:
-            delete = input(
-                f"""Collection '{collection_name}' is alread 
-exists. Do you want to delete the existing 
-colletion and recreate a new one with the same name? (Yes/no): """)
+            print_color("""Collection '{collection_name}' is alread exists!
+Do you want to delete the existing colletion and recreate 
+a new one with the same name?""", 'red')
+            delete = input("Yes/no: ")
         if delete=='Yes':
             client.delete_collection(collection_name=collection_name)
         elif delete=='no':
-            collection_name = input("Provide new collection name: ")
+            collection_name = input("Provide a new collection name: ")
             
     create_qdrant_collection(
         client=client, 
@@ -99,8 +100,10 @@ def initialize_qdrant_client(embedding_model: str = None,
 def add_document_to_qdrant_db(document,
                               client,
                               collection_name,
-                              use_text_window: bool = False,
+                              use_text_window: bool = False, 
+                              method='texts',
                               ):
+    """method: texts / summaries"""
     # check if the Document type belongs to the llangchain
     for i in range(len(document.metadata['texts'])):
         metadata = {
@@ -111,9 +114,11 @@ def add_document_to_qdrant_db(document,
             'languages': document.metadata['languages']
         }
         if use_text_window:
-            metadata['text'] = document.metadata['windows'][i]
+            metadata['texts'] = document.metadata['windows'][i]
         else:
-            metadata['text'] = document.metadata['texts'][i]
+            metadata[method] = document.metadata[method][i]
+            if method == 'summaries': 
+                metadata['texts'] = document.metadata['texts'][i]
         client.upsert(
             collection_name=collection_name,
             points=[

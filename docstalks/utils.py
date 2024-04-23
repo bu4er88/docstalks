@@ -7,7 +7,8 @@ import random
 # from pydantic import BaseModel
 # from unstructured_inference.models.base import get_model
 # from unstructured_inference.inference.layout import DocumentLayout
-# from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.document_loaders import UnstructuredPDFLoader
 # from langchain_core.output_parsers import StrOutputParser
 # from langchain_core.prompts import ChatPromptTemplate
 # import fitz
@@ -18,34 +19,176 @@ import random
 # from transformers import AutoTokenizer
 # import torch.nn.functional as F
 # from torch import Tensor
+import os
+from docstalks.config import load_config 
+from sentence_transformers import SentenceTransformer
+import yaml
+from openai import OpenAI
+from qdrant_client import QdrantClient
+
+
+class Config:
+
+    def __init__(self, config_name: str) -> None:
+        self.config = load_config(config_name)
+        # self.embedding_model_name = self.config['embedding_model_name'] #"config.yaml")
+        # self.collection_name = self.config['collection_name'] #"config.yaml")
+        # self.db_host = self.config['db_host']
+        # self.db_port = self.config['db_port']
+
+    def __str__(self) -> str:
+        print("""Config:
+              confing_name: {config_name}
+              self.embedding_model_name: {self.embedding_model_name}
+              self.collection_name: {self.collection_name}
+              """)
+        return
+        
+    def __repr__(self) -> str:
+        print(self.__str__())
+        return
+
+
+class EmbeddingModel:
+
+    def __init__(self, config) -> None:
+        self.embedding_model_name = config['embedding_model_name']
+        self.embedding_model = SentenceTransformer(self.embedding_model_name)
+      
+    def encode(self, text):
+        return self.embedding_model.encode(
+            sentences=text, 
+            convert_to_tensor=False,
+            convert_to_numpy=True
+            ).tolist()
+    
+
+class QdrantDBCRetriever:
+    """
+    method: texts / summaries
+    """
+    def __init__(self, config, ) -> None:
+        self.collection_name = config['collection_name']
+        self.qdrant_client = QdrantClient(host=config['db_host'], port=config['db_port'])
+    
+    def retrieve(self, embedding, limit=10):
+        results = self.qdrant_client.search(
+            collection_name=self.collection_name,
+            query_vector=embedding,
+            limit=limit)
+        context = [f"Source: {res.payload["filename"]}\n{res.payload["texts"].strip()}" for res in results]
+        context = '\n\n'.join(context)
+        sources = set([res.payload["filename"] for res in results])
+        return context, sources #, list(sources)
+
+    def filter(self, filter: list):
+        #TODO: add logic for filtering in the qdrant database
+        pass
+
+
+class LLM:
+
+    def __init__(self, 
+                 config, 
+                 chatbot_name='DocsTalks', 
+                 prompts_path='prompts.yaml',
+                 model_name="gpt-3.5-turbo"
+                 ) -> None:
+        self.api_key = config['openai_api_key']
+        self.llm = OpenAI(api_key=self.api_key)
+        self.chatbot_name = chatbot_name
+        self.model_name = model_name
+        self.prompts_path = prompts_path
+        self.prompts = self.collect_prompts()
+        self.openai_answer('', '')
+
+    def collect_prompts(self):
+        # current_directory = 
+        # full_path = os.path.join(current_directory, self.prompts_path)
+        with open(self.prompts_path, 'r') as file:
+            prompt_dict = yaml.safe_load(file)
+        prompts = [
+            prompt for prompt in prompt_dict['prompts'] \
+            if self.chatbot_name in prompt['name']
+        ]
+        return prompts[0]
+
+    def generate_llm_input(self, question, context) -> list:
+        system_message = self.prompts['system']
+        message_template = self.prompts['task']
+        message_template += "\nQuestion: {question}\n\nContext:\n\n{context}\n\nHelpful Answer:"    
+        user_message = message_template.format(question=question, context=context)
+        return [user_message, system_message]
+
+    def openai_answer(self, user_message, system_message):
+
+        response = self.llm.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {"role": "system", "content": system_message},
+                {"role": "user", "content": user_message},
+                ],
+                temperature=0.1,
+                # max_tokens=64,
+                # top_p=1
+            )
+        return response.choices[0].message.content
 
 
 
-def read_pdf_in_document(file: str):
+def read_pdf_in_document(file: str, 
+                         method: str ='default',
+                         chunk_size=1000,
+                         chunk_overlap=200,
+                         ):
+    """Read text from document and split it.
+
+    Args:
+        file: string contains path to the file.
+        method: 
+            'standard' - for reading and naive spliting texts;
+            'recursive' - for reading and recursive splitting by carracrs.
+    Returns:
+        Document or List[Document,]
+    """
     try:
-        parts = partition_pdf(
+        if method=='default':
+            splits = partition_pdf(
             filename=file,
             include_page_breaks=False,
             strategy='fast',
             infer_table_structure=False,
             include_metadata = True,
             chunking_strategy = None,
-        )
-        document = parts[0]
-        texts = " ".join([part.text.strip() for part in parts])
-        document.text = texts
-        document.metadata = {
-            'file_directory': document.metadata.file_directory,
-            'filename': document.metadata.filename,
-            'languages': document.metadata.languages,
-            'last_modified': document.metadata.last_modified,
-            'number_of_pages': parts[-1].metadata.page_number,
-            'filetype': document.metadata.filetype,
-        }
-        return document
+            )
+            document = splits[0]
+            merged_text = " ".join([part.text.strip() for part in splits])
+            document.text = merged_text
+            document.metadata = {
+                'file_directory': document.metadata.file_directory,
+                'filename': document.metadata.filename,
+                'languages': document.metadata.languages,
+                'last_modified': document.metadata.last_modified,
+                'number_of_pages': splits[-1].metadata.page_number,
+                'filetype': document.metadata.filetype,
+                'texts': [],
+                'windows': [],
+                'uuid': [],
+            }
+            document.category = 'Docstalks'
+            return document
+        elif method=='recursive':
+            loader = UnstructuredPDFLoader(file)
+            data = loader.load()
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size, 
+                chunk_overlap=chunk_overlap,
+                )
+            document = text_splitter.split_documents(data)
+            return document
     except Exception as e:
         print(f"🛑 Exception called by 'extract_pdf_elemets_with_unstructured' \
-        function processing the document: {fname}") 
+        function processing the document: {file}") 
         print(f"Exception: {e}")
 
 
@@ -94,80 +237,11 @@ def get_separators(file_name: str) -> str:
     return separators
 
 
-# def read_file_with_text_splitter(file_path, text_splitter):
-#     seps = get_separators(file_path)
-#     text = extract_text_from_pdf(file_path)
-#     texts = text_splitter.create_documents(text)
-#     return texts
-
-
-# def split_documents(chunk_size: int, docs: list, tokenizer_name: str) -> list:
-#     """
-#     Split documents into chunks of maximum size 'chunk_size' tokens and return a list of documents.
-#     """
-#     separators = get_separators(docs[0])
-#     # tokenizer_name = 'thenlper/gte-small' if tokenizer_name == '' else tokenizer_name
-#     text_splitter = RecursiveCharacterTextSplitter.from_huggingface_tokenizer(
-#         AutoTokenizer.from_pretrained(tokenizer_name, trust_remote_code=True),
-#         chunk_size=chunk_size,
-#         chunk_overlap=chunk_size//8,
-#         separators=separators,
-#     )
-#     docs_processed = []
-#     for doc in docs:
-#         ext = doc.split('.')[-1]
-#         if ext == 'pdf':  
-#             red_doc = read_pdf(doc)
-#             docs_processed += text_splitter.split_documents(red_doc)
-#         else:
-#             print(f"WARNING: Type of the file '{doc}' is not supported.")
-#             continue
-#     unique_texts = {}
-#     docs_processed_unique = []
-#     for doc in docs_processed:
-#         if doc.page_content not in unique_texts:
-#             unique_texts[doc.page_content] = True
-#             docs_processed_unique.append(doc)
-#     return docs_processed_unique
-
-
-def read_pdf_in_document(file: str):
-    try:
-        parts = partition_pdf(
-            filename=file,
-            include_page_breaks=False,
-            strategy='fast',
-            infer_table_structure=False,
-            include_metadata = True,
-            chunking_strategy = None,
-        )
-        document = parts[0]
-        merged_text = " ".join([part.text.strip() for part in parts])
-        document.text = merged_text
-        document.metadata = {
-            'file_directory': document.metadata.file_directory,
-            'filename': document.metadata.filename,
-            'languages': document.metadata.languages,
-            'last_modified': document.metadata.last_modified,
-            'number_of_pages': parts[-1].metadata.page_number,
-            'filetype': document.metadata.filetype,
-            'texts': [],
-            'windows': [],
-            'uuid': [],
-        }
-        document.category = 'Docstalks'
-        return document
-    except Exception as e:
-        print(f"""🛑 Exception called by 'extract_pdf_elemets_with_unstructured'
-              function processing the document: {file}""") 
-        print(f"Exception: {e}")
-
-
 def add_texts_and_windows_to_document(document, chunk_length, overlap):
     text = document.text
     words = text.split()
     start = 0
-    window_size = chunk_length * 0.8
+    window_size = int(chunk_length * 0.8)
     window_start = start + window_size
     while start < len(words):
         end = min(start + chunk_length, len(words))
@@ -186,8 +260,25 @@ def get_embedding_from_text(text, embedding_model):
     return embedding.tolist()
 
 
-def add_embeddings_to_document(document, embedding_model):
-    embeddings = [get_embedding_from_text(t, embedding_model) for t in document.metadata['texts']]
+def turn_text_to_summary(text, llm):
+    question = "Summarize the text in the following context."
+    user_message, system_message = llm.generate_llm_input(question=question, context=text)
+    summary = llm.openai_answer(user_message, system_message)
+    return summary
+
+
+def add_embeddings_to_document(document, embedding_model, method, llm=None):
+    if method == 'texts':
+        embeddings = [get_embedding_from_text(t, embedding_model) for t in document.metadata[method]]
+    elif method == 'summaries':
+        assert (llm is not None, "add_embeddings_to_document: LLM is not set up!")
+        texts = document.metadata['texts']
+        summaries = [turn_text_to_summary(text, llm) for text in texts]
+        document.metadata[method] = summaries
+        embeddings = [get_embedding_from_text(t, embedding_model) for t in document.metadata[method]]
+    else:
+        raise (f"Exception: create_document function mthod '{method}' is not valid. \
+               Use 'texts' or 'summaries'.")
     document.embeddings = embeddings
     return document
 
@@ -216,12 +307,52 @@ def convert_text_to_embedding(text, embedding_model):
     return embedding.tolist()
 
 
-def create_document(filename: str, chunk_length: int, embedding_model):
+def load_documents_with_llangchain(file_path, 
+                                   chunk_size=1000,
+                                   chunk_overlap=200,
+                                   ):
+    loader = UnstructuredPDFLoader(file_path)
+    data = loader.load()
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size, 
+        chunk_overlap=chunk_overlap,
+        )
+    splits = text_splitter.split_documents(data)
+    return splits
+
+
+def create_document(filename: str, 
+                    chunk_length: int, 
+                    embedding_model,
+                    method='texts',
+                    ):
+    """
+    method: 'texts / summaries'.
+    """
     document = read_pdf_in_document(filename)
     document = add_texts_and_windows_to_document(
-        document=document, chunk_length=chunk_length, overlap=chunk_length//10
+        document=document, 
+        chunk_length=chunk_length, 
+        overlap=chunk_length//10,
         )
-    document = add_embeddings_to_document(document=document, embedding_model=embedding_model)
+    if method=='texts': 
+        llm = None
+    elif method=='summaries':
+        config = Config(config_name="config.yaml").config
+        llm = LLM(
+            config, 
+            chatbot_name='TextSummarizer', 
+            prompts_path='/Users/eugene/Desktop/docstalks/docstalks/chat/prompts.yaml'
+            )
+    else:
+        raise (f"Exception: create_document function mthod '{method}' is not valid. \
+               Use 'texts' or 'summaries'.")
+    document = add_embeddings_to_document(
+        document=document, 
+        embedding_model=embedding_model,
+        method=method,
+        llm=llm
+        )
     document = add_uuid_to_document(document)
     return document
 
@@ -231,3 +362,22 @@ def stream_text(input):
         print(char, end='', flush=True)
         delay = round(random.uniform(0.0005, 0.005), 6)
         time.sleep(delay)
+
+
+def print_color(text, color):
+    colors = {
+        'red': '\033[91m',
+        'green': '\033[92m',
+        'yellow': '\033[93m',
+        'blue': '\033[94m',
+        'purple': '\033[95m',
+        'cyan': '\033[96m',
+        'white': '\033[97m'
+    }
+    reset_color = '\033[0m'
+    if not isinstance(text, str): 
+        text = str(text)
+    if color.lower() in colors:
+        print(colors[color.lower()] + text + reset_color)
+    else:
+        print("Invalid color. Available colors are:", ", ".join(colors.keys()))

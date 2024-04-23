@@ -160,3 +160,6 @@ cython_debug/
 #.idea/
 
 .DS_Store
+qdrant_storage/
+rag_llangchain copy.py
+rag_llangchain.py

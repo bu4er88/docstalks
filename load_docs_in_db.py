@@ -3,7 +3,8 @@
 # import torch 
 from docstalks.utils import (convert_text_to_embedding,
                              stream_text,
-                             create_document,)
+                             create_document,
+                             print_color,)
 from docstalks.dbconnector import (initialize_qdrant_client,
                                    add_document_to_qdrant_db,
                                    search_in_qdrant_db,)
@@ -18,6 +19,8 @@ import logging
 import os
 from tqdm import tqdm
 from openai import OpenAI
+from docstalks.config import load_config 
+   
 
 
 
@@ -27,6 +30,12 @@ from openai import OpenAI
 config = load_config("config.yaml")
 embedding_model_name = config['embedding_model_name']
 collection_name = config['collection_name']
+use_text_window = config['use_text_window']
+chunk_length = config['chunk_length']
+
+print_color("********** Config: **********", "green")
+print_color(config, 'green')
+print_color("*****************************", "green")
 
 embedding_model = SentenceTransformer(embedding_model_name)
 
@@ -47,14 +56,16 @@ qdrant_client,collection_name = initialize_qdrant_client(
 for filename in tqdm(flist):
     try:
         document = create_document(
-            filename=filename, chunk_length=150, embedding_model=embedding_model
-            )
+            filename=filename, 
+            chunk_length=150, 
+            embedding_model=embedding_model,
+            method='summaries',)
         add_document_to_qdrant_db(
             document=document, 
             client=qdrant_client, 
             collection_name=collection_name, 
-            use_text_window=False
-            )
+            use_text_window=use_text_window,
+            method='summaries',)
     except Exception as e:
         print(f"The file was't added to the database: {filename}")
         print(f"Exception: {e}")
