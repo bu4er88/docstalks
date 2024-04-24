@@ -20,11 +20,13 @@ from langchain_community.document_loaders import UnstructuredPDFLoader
 # import torch.nn.functional as F
 # from torch import Tensor
 import os
-from docstalks.config import load_config 
 from sentence_transformers import SentenceTransformer
 import yaml
 from openai import OpenAI
 from qdrant_client import QdrantClient
+import sys
+sys.path.append("..")
+from docstalks.config import load_config 
 
 
 class Config:
@@ -75,7 +77,8 @@ class QdrantDBCRetriever:
         results = self.qdrant_client.search(
             collection_name=self.collection_name,
             query_vector=embedding,
-            limit=limit)
+            limit=limit
+        )
         context = [f"Source: {res.payload["filename"]}\n{res.payload["texts"].strip()}" for res in results]
         context = '\n\n'.join(context)
         sources = set([res.payload["filename"] for res in results])
@@ -121,16 +124,13 @@ class LLM:
         return [user_message, system_message]
 
     def openai_answer(self, user_message, system_message):
-
         response = self.llm.chat.completions.create(
             model=self.model_name,
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_message},
                 ],
-                temperature=0.1,
-                # max_tokens=64,
-                # top_p=1
+            temperature=0,
             )
         return response.choices[0].message.content
 
@@ -154,12 +154,12 @@ def read_pdf_in_document(file: str,
     try:
         if method=='default':
             splits = partition_pdf(
-            filename=file,
-            include_page_breaks=False,
-            strategy='fast',
-            infer_table_structure=False,
-            include_metadata = True,
-            chunking_strategy = None,
+                filename=file,
+                include_page_breaks=False,
+                strategy='fast',
+                infer_table_structure=False,
+                include_metadata = True,
+                chunking_strategy = None,
             )
             document = splits[0]
             merged_text = " ".join([part.text.strip() for part in splits])
@@ -173,6 +173,7 @@ def read_pdf_in_document(file: str,
                 'filetype': document.metadata.filetype,
                 'texts': [],
                 'windows': [],
+                'classes': [],
                 'uuid': [],
             }
             document.category = 'Docstalks'
@@ -190,26 +191,6 @@ def read_pdf_in_document(file: str,
         print(f"🛑 Exception called by 'extract_pdf_elemets_with_unstructured' \
         function processing the document: {file}") 
         print(f"Exception: {e}")
-
-
-def sumarize_tables(table_elements: list, summarize_chain) -> tuple:
-    # Apply to tables
-    tables = [i.text for i in table_elements]
-    table_summaries = summarize_chain.batch(tables, {"max_concurrency": 5})
-    return tables, table_summaries
-
-
-def sumarize_texts(text_elements: list, summarize_chain) -> tuple:
-    try:
-        texts = [i.text for i in text_elements]
-    except:
-        texts = text_elements[0]
-    print(texts)
-    # finally:
-    #     raise TypeError(f"sumarize_texts function didn't processed the input: {text_elements}\n\
-    #     Required input is List[srt,]")
-    text_summaries = summarize_chain.batch(texts, {"max_concurrency": 5})    
-    return texts, text_summaries
 
 
 def get_file_extension(file_name: str) -> str:
@@ -260,25 +241,52 @@ def get_embedding_from_text(text, embedding_model):
     return embedding.tolist()
 
 
-def turn_text_to_summary(text, llm):
+def summarize_text(text, llm):
     question = "Summarize the text in the following context."
     user_message, system_message = llm.generate_llm_input(question=question, context=text)
     summary = llm.openai_answer(user_message, system_message)
     return summary
 
 
-def add_embeddings_to_document(document, embedding_model, method, llm=None):
-    if method == 'texts':
-        embeddings = [get_embedding_from_text(t, embedding_model) for t in document.metadata[method]]
-    elif method == 'summaries':
-        assert (llm is not None, "add_embeddings_to_document: LLM is not set up!")
-        texts = document.metadata['texts']
-        summaries = [turn_text_to_summary(text, llm) for text in texts]
-        document.metadata[method] = summaries
-        embeddings = [get_embedding_from_text(t, embedding_model) for t in document.metadata[method]]
+def classify_text(text, llm):
+    question = "Summarize the text in the following context."
+    user_message, system_message = llm.generate_llm_input(question=question, context=text)
+    summary = llm.openai_answer(user_message, system_message)
+    return summary
+
+def extract_keywords_from_text(text, llm):
+    question = "Extract 1-10 keywords from the following context."
+    user_message, system_message = llm.generate_llm_input(question=question, context=text)
+    keywords = llm.openai_answer(user_message, system_message)
+    return list(keywords.split(' '))
+
+
+def process_document(document, embedding_model, methods, models):
+    if methods == 'default':
+        embeddings = [get_embedding_from_text(t, embedding_model) for t in document.metadata['texts']]
     else:
-        raise (f"Exception: create_document function mthod '{method}' is not valid. \
-               Use 'texts' or 'summaries'.")
+        if (models is None) or \
+            (len(models.keys()) == 0) or \
+                not isinstance(models, dict):
+            raise(f"'process_document()': 'methods' type is not valid: {methods}")
+        texts = document.metadata['texts']
+        model_result = {}
+        for model in models:
+            if model not in model_result:
+                model_result[model] = [
+                    models[model].openai_answer(
+                        user_message=models[model].generate_llm_input('', text)[0], 
+                        system_message=models[model].generate_llm_input('', text)[1],
+                        ) for text in texts
+                ]
+            document.metadata[model] = model_result[model]
+        # document.metadata['classes'] = classes
+        # document.metadata['keywords'] = keywords
+        
+    embeddings = [get_embedding_from_text(text, embedding_model) for text in document.metadata['texts']]
+    # else:
+    #     raise(f"Exception: create_document function mthod '{methods}' is not valid. \
+    #            Use 'texts' or 'summaries'.")
     document.embeddings = embeddings
     return document
 
@@ -322,9 +330,10 @@ def load_documents_with_llangchain(file_path,
 
 
 def create_document(filename: str, 
+                    config,
                     chunk_length: int, 
                     embedding_model,
-                    method='texts',
+                    methods='default',
                     ):
     """
     method: 'texts / summaries'.
@@ -334,25 +343,29 @@ def create_document(filename: str,
         document=document, 
         chunk_length=chunk_length, 
         overlap=chunk_length//10,
-        )
-    if method=='texts': 
+    )
+    if methods=='default':
         llm = None
-    elif method=='summaries':
-        config = Config(config_name="config.yaml").config
-        llm = LLM(
-            config, 
-            chatbot_name='TextSummarizer', 
-            prompts_path='/Users/eugene/Desktop/docstalks/docstalks/chat/prompts.yaml'
-            )
     else:
-        raise (f"Exception: create_document function mthod '{method}' is not valid. \
-               Use 'texts' or 'summaries'.")
-    document = add_embeddings_to_document(
-        document=document, 
+        if isinstance(methods, str): 
+            methods = list(methods)
+        elif isinstance(methods, list):
+            models = {}
+            for method in methods:
+                if method not in models.keys():
+                    models[method]= LLM(
+                        config=config,
+                        chatbot_name=method, 
+                        prompts_path='/Users/eugene/Desktop/docstalks/docstalks/chat/prompts.yaml'
+                    )
+        else:
+            raise (f"create_document(): variable methods is not valid: {methods}")
+    document = process_document(
+        document=document,
         embedding_model=embedding_model,
-        method=method,
-        llm=llm
-        )
+        methods=methods,
+        models=models,
+    )
     document = add_uuid_to_document(document)
     return document
 
@@ -381,3 +394,23 @@ def print_color(text, color):
         print(colors[color.lower()] + text + reset_color)
     else:
         print("Invalid color. Available colors are:", ", ".join(colors.keys()))
+
+
+#  def sumarize_tables(table_elements: list, summarize_chain) -> tuple:
+#     # Apply to tables
+#     tables = [i.text for i in table_elements]
+#     table_summaries = summarize_chain.batch(tables, {"max_concurrency": 5})
+#     return tables, table_summaries
+
+
+# def sumarize_texts(text_elements: list, summarize_chain) -> tuple:
+#     try:
+#         texts = [i.text for i in text_elements]
+#     except:
+#         texts = text_elements[0]
+#     print(texts)
+#     # finally:
+#     #     raise TypeError(f"sumarize_texts function didn't processed the input: {text_elements}\n\
+#     #     Required input is List[srt,]")
+#     text_summaries = summarize_chain.batch(texts, {"max_concurrency": 5})    
+#     return texts, text_summaries

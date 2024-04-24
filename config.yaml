@@ -1,5 +1,5 @@
 # Qdrant Database Settings
-collection_name: small_chunk_summary_and_big_context_windows #llangchain_collection small_texts default_summaries
+collection_name: small_chunk_summary_big_context_windows_and_classes #llangchain_collection small_texts default_summaries
 db_host: localhost
 db_port: 6333
 
@@ -9,7 +9,9 @@ openai_api_key: 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
 # RAG Settings
 embedding_model_name: intfloat/e5-base-v2
 use_text_window: True
-chunk_length: 100
+chunk_length: 150
+limit: 30
+methods: ['summaries', 'classes', 'keywords']
 
 # Retriever Settings
 bot_name: DocsTalks

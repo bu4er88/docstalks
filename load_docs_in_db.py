@@ -23,7 +23,6 @@ from docstalks.config import load_config
    
 
 
-
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # print(f"device: {device}")
 
@@ -32,10 +31,11 @@ embedding_model_name = config['embedding_model_name']
 collection_name = config['collection_name']
 use_text_window = config['use_text_window']
 chunk_length = config['chunk_length']
+methods=config['methods']
 
-print_color("********** Config: **********", "green")
-print_color(config, 'green')
-print_color("*****************************", "green")
+print_color("********** Config: **********", "yellow")
+print_color(config, 'yellow')
+print_color("*****************************", "yellow")
 
 embedding_model = SentenceTransformer(embedding_model_name)
 
@@ -54,18 +54,21 @@ qdrant_client,collection_name = initialize_qdrant_client(
 
 
 for filename in tqdm(flist):
-    try:
+    try:        
         document = create_document(
             filename=filename, 
+            config=config,
             chunk_length=150, 
             embedding_model=embedding_model,
-            method='summaries',)
+            methods=methods,
+        )
         add_document_to_qdrant_db(
             document=document, 
-            client=qdrant_client, 
+            client=qdrant_client,
             collection_name=collection_name, 
             use_text_window=use_text_window,
-            method='summaries',)
+            methods=methods,
+        )
     except Exception as e:
         print(f"The file was't added to the database: {filename}")
         print(f"Exception: {e}")

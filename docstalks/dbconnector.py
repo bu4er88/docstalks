@@ -7,6 +7,8 @@ from qdrant_client.models import Distance, VectorParams, models
 from qdrant_client import QdrantClient
 from docstalks.utils import print_color
 
+from copy import deepcopy
+
 
 def create_qdrant_collection(client, 
                              collection_name,
@@ -64,68 +66,30 @@ def initialize_qdrant_client(embedding_model: str = None,
         )
     return qdrant_client, collection_name
 
-# def binarize_text(text):
-#     # Encode text to bytes
-#     text_bytes = text.encode('utf-8')
-#     # Encode bytes to base64 binary representation
-#     binarized_text = base64.b64encode(text_bytes)
-#     return binarized_text
-
-# def debinarize_text(binarized_text):
-#     # Decode base64 binary representation to bytes
-#     text_bytes = base64.b64decode(binarized_text)
-#     # Decode bytes to text
-#     text = text_bytes.decode('utf-8')
-#     return text
-
-
-# def pad_vector(vector, pad_value=0):
-#     """Pads all vectors in a list to the same length.
-    
-#     Args:
-#       vectors: A list of NumPy arrays representing the vectors.
-#       target_length: The desired length for all padded vectors.
-#       pad_value: The value to use for padding (default: 0).
-    
-#     Returns:
-#       A list of NumPy arrays with all vectors padded to the target length.
-#     """
-#     target_length = tokenizer.model_max_length
-#     padding_length = target_length - len(vector)
-#     padding = np.full((padding_length,), pad_value)
-#     padded_vector = np.concatenate((vector, padding))
-#     return padded_vector
-
 
 def add_document_to_qdrant_db(document,
                               client,
                               collection_name,
                               use_text_window: bool = False, 
-                              method='texts',
+                              methods='default',
                               ):
-    """method: texts / summaries"""
     # check if the Document type belongs to the llangchain
     for i in range(len(document.metadata['texts'])):
-        metadata = {
-            'filename': document.metadata['filename'],
-            'filetype': document.metadata['filetype'],
-            'last_modified': document.metadata['last_modified'],
-            'number_of_pages': document.metadata['number_of_pages'],
-            'languages': document.metadata['languages']
-        }
+        doc = deepcopy(document)
+        if methods != 'default':
+            for method in methods:
+                doc.metadata[method] = document.metadata[method][i]
         if use_text_window:
-            metadata['texts'] = document.metadata['windows'][i]
+            doc.metadata['texts'] = document.metadata['windows'][i]
         else:
-            metadata[method] = document.metadata[method][i]
-            if method == 'summaries': 
-                metadata['texts'] = document.metadata['texts'][i]
+            doc.metadata['texts'] = document.metadata['texts'][i]
         client.upsert(
             collection_name=collection_name,
             points=[
                 models.PointStruct(
-                    id=document.metadata['uuid'][i],
-                    vector=document.embeddings[i],
-                    payload=metadata,
+                    id=doc.metadata['uuid'][i],
+                    vector=doc.embeddings[i],
+                    payload=doc.metadata,
                 ),
             ],
         )

@@ -74,8 +74,8 @@ prompts:
     datetime_aware: true
     include_citations: true
 
-  - name: "TextSummarizer"
-    description: "Summarize texts chunks in the Document."
+  - name: "summaries"
+    description: "Summarizes texts chunks in the Document."
     # System Prompt (as shown in UI)
     system: >
       You are a helpful assistant which read texts carefully and provides clear and short summarizaion. 
@@ -86,3 +86,30 @@ prompts:
     task: >
       Provide a clear and short summarization of the text. 
       Your answer must be short and contain maximum relevant meaning as it possible.
+
+
+  - name: "classes"
+    description: "Classifies texts."
+    # System Prompt (as shown in UI)
+    system: >
+      You are a helpful assistant which read texts carefully and classify it with short class name. 
+      Your answer must contains ONLY class and nothing else. 
+      If you can't classify the text, your answer must be: 'Other'.
+    # Task Prompt (as shown in UI)
+    task: >
+      Provide a clear and short class for the Context using ONLY 1-3 words. 
+      Your answer must contain only class of 1-3 words and nothing else.
+  
+
+  - name: "keywords"
+    description: "Extract keywords from texts."
+    # System Prompt (as shown in UI)
+    system: >
+      You are a helpful assistant which read texts carefully and classify it with AT MOST ten keywords.
+      Your answer must be the comma-separated lowercase words like "finance, banking, company size, departments".
+      Your answer must contains AT LEAST one and AT MOST ten keywords that express the meaning of the text the best way. 
+      If you can't provide keywords for the text, your answer must be: 'other'.
+    # Task Prompt (as shown in UI)
+    task: >
+      Provide a clear and short class for the Context using ONLY 1-3 words. 
+      Your answer must contain only class of 1-3 words and nothing else.

@@ -23,8 +23,8 @@ if __name__=='__main__':
 
     config = Config(config_name="config.yaml").config
     bot_name = config['bot_name']
+    limit = config['limit']
     embedding_model = EmbeddingModel(config)
-    
     retriever = QdrantDBCRetriever(config)
     
     llm = LLM(
@@ -38,11 +38,10 @@ if __name__=='__main__':
     while True:
         question = input("Ask your question: ")
         query_embedding = embedding_model.encode(text=question)
-        context, sources = retriever.retrieve(query_embedding)
+        context, sources = retriever.retrieve(query_embedding, limit=limit)
         user_message, system_message = llm.generate_llm_input(
             question=question, 
             context=context,
-            # sources=sources
             )
         answer = llm.openai_answer(user_message, system_message)
         print("Answer: ", end='')
