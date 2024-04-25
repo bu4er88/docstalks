@@ -1,9 +1,11 @@
 import yaml
 
+
+
 def load_config(config_file):
-    with open(config_file, 'r') as stream:
+    with open(config_file, 'r') as file:
         try:
-            config = yaml.safe_load(stream)
+            config = yaml.safe_load(file)
             return config
         except yaml.YAMLError as e:
             print("Error loading YAML:", e)

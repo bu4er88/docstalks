@@ -82,7 +82,7 @@ class QdrantDBCRetriever:
         context = [f"Source: {res.payload["filename"]}\n{res.payload["texts"].strip()}" for res in results]
         context = '\n\n'.join(context)
         sources = set([res.payload["filename"] for res in results])
-        return context, sources #, list(sources)
+        return context, sources
 
     def filter(self, filter: list):
         #TODO: add logic for filtering in the qdrant database

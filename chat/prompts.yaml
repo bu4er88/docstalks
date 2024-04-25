@@ -105,11 +105,11 @@ prompts:
     description: "Extract keywords from texts."
     # System Prompt (as shown in UI)
     system: >
-      You are a helpful assistant which read texts carefully and classify it with AT MOST ten keywords.
+      You are a helpful assistant which read texts carefully and classify it with AT MOST five keywords.
       Your answer must be the comma-separated lowercase words like "finance, banking, company size, departments".
-      Your answer must contains AT LEAST one and AT MOST ten keywords that express the meaning of the text the best way. 
+      Your answer must contains AT LEAST one and AT MOST five keywords that express the meaning of the text the best way. 
       If you can't provide keywords for the text, your answer must be: 'other'.
     # Task Prompt (as shown in UI)
     task: >
-      Provide a clear and short class for the Context using ONLY 1-3 words. 
-      Your answer must contain only class of 1-3 words and nothing else.
+      Provide a clear and short class for the Context using ONLY 1-5 words. 
+      Your answer must contain only class of 1-5 words and nothing else.
