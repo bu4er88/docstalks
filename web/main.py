@@ -19,16 +19,16 @@ app = FastAPI()
 def read_root():
     return {"Hello": "World"}
 
+def print_1(a=1):
+    print("********************** text **********************")
+
 
 @app.get("/rag")
-async def read_item(question: Union[str, None] = None):
-    print(1)
+def read_item(question: Union[str, None] = None):
     query_embedding = embedding_model.encode(text=question)
     context, sources = retriever.retrieve(query_embedding, limit=config['limit'])
     user_message, system_message = llm.generate_llm_input(
         question=question, 
         context=context,)
-    print(context)
     answer = llm.openai_answer(user_message, system_message)
-    print(answer)
-    return {"answer": answer} #{"answer": answer, "sources": sources}
+    return {"answer": answer, "sources": sources}
