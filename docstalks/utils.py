@@ -135,7 +135,6 @@ class LLM:
         return response.choices[0].message.content
 
 
-
 def read_pdf_in_document(file: str, 
                          method: str ='default',
                          chunk_size=1000,
@@ -254,6 +253,7 @@ def classify_text(text, llm):
     summary = llm.openai_answer(user_message, system_message)
     return summary
 
+
 def extract_keywords_from_text(text, llm):
     question = "Extract 1-10 keywords from the following context."
     user_message, system_message = llm.generate_llm_input(question=question, context=text)
@@ -280,13 +280,7 @@ def process_document(document, embedding_model, methods, models):
                         ) for text in texts
                 ]
             document.metadata[model] = model_result[model]
-        # document.metadata['classes'] = classes
-        # document.metadata['keywords'] = keywords
-        
     embeddings = [get_embedding_from_text(text, embedding_model) for text in document.metadata['texts']]
-    # else:
-    #     raise(f"Exception: create_document function mthod '{methods}' is not valid. \
-    #            Use 'texts' or 'summaries'.")
     document.embeddings = embeddings
     return document
 
@@ -396,21 +390,47 @@ def print_color(text, color):
         print("Invalid color. Available colors are:", ", ".join(colors.keys()))
 
 
-#  def sumarize_tables(table_elements: list, summarize_chain) -> tuple:
-#     # Apply to tables
-#     tables = [i.text for i in table_elements]
-#     table_summaries = summarize_chain.batch(tables, {"max_concurrency": 5})
-#     return tables, table_summaries
+######################################
+### CONNECTOR FOR THE WEB SCRAPING ###
+######################################
+
+from bs4 import BeautifulSoup
+import requests
+from time import time 
+from unstructured.partition.html import partition_html
 
 
-# def sumarize_texts(text_elements: list, summarize_chain) -> tuple:
-#     try:
-#         texts = [i.text for i in text_elements]
-#     except:
-#         texts = text_elements[0]
-#     print(texts)
-#     # finally:
-#     #     raise TypeError(f"sumarize_texts function didn't processed the input: {text_elements}\n\
-#     #     Required input is List[srt,]")
-#     text_summaries = summarize_chain.batch(texts, {"max_concurrency": 5})    
-#     return texts, text_summaries
+def get_links(url: str, verify: bool) -> list:
+    response = requests.get(url, verify=verify)
+    data = response.text
+    soup = BeautifulSoup(data, 'lxml')
+    links = []
+    for link in soup.find_all('a'):
+        link_url = link.get('href')
+        if link_url is not None and link_url.startswith('http'):
+            links.append(link_url)
+    links.append(url)
+    return links
+
+
+def split_webpage_into_documents(url: str, recursive: bool = False, ssl_verify: bool = False):
+    if recursive:
+        links = get_links(url=url, verify=ssl_verify)
+        elements = []
+        for link in links:
+            elements.extend(partition_html(url=link, ssl_verify=ssl_verify))
+        return elements
+    else:
+        elements = partition_html(url=url, ssl_verify=ssl_verify)
+        return elements
+
+if __name__=="__main__":
+    base_url = "https://aipex.technology"
+
+    t = time()
+    res_default = split_webpage_into_documents(base_url, ssl_verify=False)
+    print(time() - t, ' s')
+
+    t = time()
+    res_recursive = split_webpage_into_documents(base_url, recursive=True, ssl_verify=False)
+    print(time() - t, ' s')
