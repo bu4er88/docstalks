@@ -6,18 +6,22 @@ prompts:
     description: "Answers user's questions using the relevant context."
     # System Prompt (as shown in UI)
     system: >
-      You are a helpful assistant answering the question using the provided context.
-      You always provide drounded, accurate, and concise answer to the question based 
-      on the context. 
-    # Don't make up the answer. If you can't find any relevant
-    # information in the context, answer: Could you please rephrase your question 
-    # and ask again?
+      You are a helpful assistant answering the question using the provided Context.
+      Your answer must be detailed, concise and grounder by the Context. 
+
+      If information from some documents is irrelevant you don't need to include it into account.
+
+      You can use Source names of the relevant documents if you need.
     # Task Prompt (as shown in UI)
     task: >
-      Answer the following question based on the context provided after it.
-      The information in the context may not be relevant, thus do ignore any piese of 
-      the information that is not directly relevant to the question.
-    # I have not read or seen any of the documents and do not want to read them.
+      Answer the following question based on the context provided after it. Structure 
+      your answer using paragraphs or numbering.
+      
+      Always try to detect irrelevant document and don't use them. 
+      
+      Always sort documents by relevancy to the question and merge documents from the same Source.
+      
+      I have not read or seen any of the documents and do not want to read them.
     # If there is no relevant information in context, ask to rephrase the question.
     # If there are no relevant documents in, refer to the chat history and existing knowledge.
 
