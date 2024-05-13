@@ -1,6 +1,6 @@
 from unstructured.partition.pdf import partition_pdf
 import uuid
-import time
+from time import time, sleep
 import random
 
 # from typing import Any
@@ -368,7 +368,7 @@ def stream_text(input):
     for char in input:
         print(char, end='', flush=True)
         delay = round(random.uniform(0.0005, 0.005), 6)
-        time.sleep(delay)
+        sleep(delay)
 
 
 def print_color(text, color):
@@ -396,7 +396,6 @@ def print_color(text, color):
 
 from bs4 import BeautifulSoup
 import requests
-from time import time 
 from unstructured.partition.html import partition_html
 
 
