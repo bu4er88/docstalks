@@ -42,7 +42,7 @@ python load_docs_in_db.py --source <path_to_documents>
 ## 4. Run API server
 **To run the server just run this command in your terminal:**
 ```
-python web/backend/main.py
+python api/backend/main.py
 ```
 It runs the backend server. You can open it with the link http://127.0.0.1:8000/docs
 
