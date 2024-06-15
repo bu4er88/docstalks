@@ -3,7 +3,7 @@ import uvicorn
 
 
 def main(app, host, port, reload):
-    uvicorn.run(app=app, host=host, port=port, reload=reload)\
+    uvicorn.run(app=app, host=host, port=port, reload=reload)
     
     
 if __name__=="__main__":
@@ -12,8 +12,8 @@ if __name__=="__main__":
     parser.add_argument('--host', default="127.0.0.1", type=str)
     parser.add_argument('--port', default=8000, type=int)
     parser.add_argument('--reload', default=True, type=bool)
-
     args = parser.parse_args()
+    
     print(args)
     app = args.app
     host = args.host

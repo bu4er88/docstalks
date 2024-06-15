@@ -19,8 +19,9 @@ def create_qdrant_collection(client,
         collection_name=collection_name,
         vectors_config=VectorParams(
             size=embedding_lenght, 
-            distance=distance,),)
-    return
+            distance=distance,
+        ),
+    )
 
 
 def check_collection_exists_in_qdrant(client, 
@@ -31,16 +32,18 @@ def check_collection_exists_in_qdrant(client,
     collections_list = client.get_collections().collections
     collections_names = [collection.name for collection in collections_list]
     if collection_name in collections_names:
-        delete = ''
-        while delete not in ['Yes', 'no']:
-            print_color("""Collection '{collection_name}' is alread exists!
-Do you want to delete the existing colletion and recreate 
-a new one with the same name?""", 'red')
-            delete = input("Yes/no: ")
-        if delete=='Yes':
-            client.delete_collection(collection_name=collection_name)
-        elif delete=='no':
-            collection_name = input("Provide a new collection name: ")
+        while collection_name in collections_names:
+            delete = ''
+            while delete not in ['Yes', 'y', 'yes', 'No', 'n', 'no']:
+                print_color(f"Collection '{collection_name}' is alread exists!\n\
+Do you want to delete the existing colletion and recreate \
+a new one with the same name?", 'red')
+                delete = input("Yes/no: ")
+            if delete in ['Yes', 'y', 'yes']:
+                client.delete_collection(collection_name=collection_name)
+                collections_names.remove(collection_name)
+            elif delete in ['No', 'n', 'no']:
+                collection_name = str(input("Provide a new collection name: "))
             
     create_qdrant_collection(
         client=client, 
@@ -63,7 +66,7 @@ def initialize_qdrant_client(embedding_model: str = None,
         collection_name=collection_name,
         embedding_lenght=embedding_lenght,
         distance=distance,
-        )
+    )
     return qdrant_client, collection_name
 
 

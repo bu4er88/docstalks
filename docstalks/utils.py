@@ -188,7 +188,7 @@ def read_pdf_in_document(file: str,
             return document
     except Exception as e:
         print(f"🛑 Exception called by 'extract_pdf_elemets_with_unstructured' \
-        function processing the document: {file}") 
+function processing the document: {file}") 
         print(f"Exception: {e}")
 
 
@@ -324,7 +324,7 @@ def load_documents_with_llangchain(file_path,
 
 
 def create_document(filename: str, 
-                    config,
+                    config: dict,
                     chunk_length: int, 
                     embedding_model,
                     methods='default',
