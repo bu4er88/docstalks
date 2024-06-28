@@ -2,31 +2,20 @@ from unstructured.partition.pdf import partition_pdf
 import uuid
 from time import time, sleep
 import random
-
-# from typing import Any
-# from pydantic import BaseModel
-# from unstructured_inference.models.base import get_model
-# from unstructured_inference.inference.layout import DocumentLayout
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.document_loaders import UnstructuredPDFLoader
-# from langchain_core.output_parsers import StrOutputParser
-# from langchain_core.prompts import ChatPromptTemplate
-# import fitz
-# from langchain_core.output_parsers import StrOutputParser
-# from langchain_core.prompts import ChatPromptTemplate
-# from langchain_openai import ChatOpenAI
-# from langchain import hub
-# from transformers import AutoTokenizer
-# import torch.nn.functional as F
-# from torch import Tensor
-import os
+from langchain_community.document_loaders import (
+    UnstructuredPDFLoader, UnstructuredHTMLLoader
+)
 from sentence_transformers import SentenceTransformer
 import yaml
 from openai import OpenAI
 from qdrant_client import QdrantClient
+from typing import Tuple
 import sys
-sys.path.append("..")
-from docstalks.config import load_config 
+from pathlib import Path
+CURR_DIR = Path(__file__)
+sys.path.append(str(CURR_DIR))
+from .config import load_config 
 
 
 class Config:
@@ -79,7 +68,7 @@ class QdrantDBCRetriever:
             query_vector=embedding,
             limit=limit
         )
-        context = [f"Source: {res.payload["filename"]}\n{res.payload["texts"].strip()}" for res in results]
+        context = [f"Source: {res.payload["filename"]}\n{res.payload["text"].strip()}" for res in results]
         context = '\n\n'.join(context)
         sources = set([res.payload["filename"] for res in results])
         return context, sources
@@ -192,6 +181,55 @@ function processing the document: {file}")
         print(f"Exception: {e}")
 
 
+def read_url_in_document(documents: list, 
+                         method: str ='default',
+                         chunk_size=1000,
+                         chunk_overlap=200,
+                         ):
+    """Read text from document and split it.
+
+    Args:
+        file: string contains path to the file.
+        method: 
+            'standard' - for reading and naive spliting texts;
+            'recursive' - for reading and recursive splitting by carracrs.
+    Returns:
+        Document or List[Document,]
+    """
+    try:
+        if method=='default':
+            document = documents[0]
+            merged_text = " ".join([part.text.strip() for part in documents])
+            document.text = merged_text
+            document.metadata = {
+                'file_directory': 'web',
+                'filename': document.metadata.url,
+                'languages': document.metadata.languages,
+                'last_modified': document.metadata.last_modified,
+                'number_of_pages': document.metadata.category_depth,
+                'filetype': document.metadata.filetype,
+                'texts': [],
+                'windows': [],
+                'classes': [],
+                'uuid': [],
+            }
+            document.category = 'Docstalks'
+            return document
+        elif method=='recursive':
+            loader = UnstructuredHTMLLoader(documents)
+            data = loader.load()
+            text_splitter = RecursiveCharacterTextSplitter(
+                chunk_size=chunk_size, 
+                chunk_overlap=chunk_overlap,
+                )
+            document = text_splitter.split_documents(data)
+            return document
+    except Exception as e:
+        print(f"🛑 Exception called by 'extract_pdf_elemets_with_unstructured' \
+function processing the url scrapping!") 
+        print(f"Exception: {e}")
+
+
 def get_file_extension(file_name: str) -> str:
     file_ext = '.' + file_name.split('.')[-1]
     return file_ext
@@ -218,11 +256,12 @@ def get_separators(file_name: str) -> str:
 
 
 def add_texts_and_windows_to_document(document, chunk_length, overlap):
+    overlap = max(30, overlap)
     text = document.text
     words = text.split()
     start = 0
     window_size = int(chunk_length * 0.8)
-    window_start = start + window_size
+    window_start = 0
     while start < len(words):
         end = min(start + chunk_length, len(words))
         window_end = min(end + window_size, len(words))
@@ -364,6 +403,47 @@ def create_document(filename: str,
     return document
 
 
+def create_document_from_url(filename: list, 
+                            config: dict,
+                            chunk_length: int, 
+                            embedding_model,
+                            methods='default',
+                            ):
+    """
+    method: 'texts / summaries'.
+    """
+    document = read_url_in_document(filename)
+    document = add_texts_and_windows_to_document(
+        document=document, 
+        chunk_length=chunk_length, 
+        overlap=chunk_length//10,
+    )
+    if methods=='default':
+        llm = None
+    else:
+        if isinstance(methods, str): 
+            methods = list(methods)
+        elif isinstance(methods, list):
+            models = {}
+            for method in methods:
+                if method not in models.keys():
+                    models[method]= LLM(
+                        config=config,
+                        chatbot_name=method, 
+                        prompts_path='/Users/eugene/Desktop/docstalks/docstalks/chat/prompts.yaml'
+                    )
+        else:
+            raise (f"create_document(): variable methods is not valid: {methods}")
+    document = process_document(
+        document=document,
+        embedding_model=embedding_model,
+        methods=methods,
+        models=models,
+    )
+    document = add_uuid_to_document(document)
+    return document
+
+
 def stream_text(input):
     for char in input:
         print(char, end='', flush=True)
@@ -399,8 +479,8 @@ import requests
 from unstructured.partition.html import partition_html
 
 
-def get_links(url: str, verify: bool) -> list:
-    response = requests.get(url, verify=verify)
+def get_links(url: str, verify: bool, headers: dict) -> list:
+    response = requests.get(url, verify=verify, headers=headers)
     data = response.text
     soup = BeautifulSoup(data, 'lxml')
     links = []
@@ -412,19 +492,66 @@ def get_links(url: str, verify: bool) -> list:
     return links
 
 
+def collect_text_from_partition_html(documents: list):
+    if len(documents) > 1:
+        docs = [doc.text for doc in documents]
+        return '\n'.join(docs)
+    else:
+        try:
+            return documents[0].text
+        except:
+            return ''
+
+
+# def split_webpage_into_documents(url: str, recursive: bool = False, ssl_verify: bool = False):
+#     headers = {
+#     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+#     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+#     'Accept-Language': 'en-US,en;q=0.5'
+#     }
+#     if recursive:
+#         links = get_links(url=url, verify=ssl_verify, headers=headers)
+#         links = list(set(links))  #deleting duplicated links
+#         elements = dict()
+#         for link in links:
+#             result = partition_html(url=link, ssl_verify=ssl_verify, headers=headers)
+#             text = collect_text_from_partition_html(documents=result)
+#             if link not in elements.keys():
+#                 elements[link] = text
+#             else:
+#                 elements[link].extend(text)
+#         for key in elements.keys():
+#             if len(elements[key]) > 1:
+#                 elements[key] = '\n'.join(elements[key])
+#         return elements
+#     else:
+#         elements = partition_html(url=url, ssl_verify=ssl_verify, headers=headers)
+#         return {url: elements}
+
 def split_webpage_into_documents(url: str, recursive: bool = False, ssl_verify: bool = False):
+    headers = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5'
+    }
     if recursive:
-        links = get_links(url=url, verify=ssl_verify)
-        elements = []
+        links = get_links(url=url, verify=ssl_verify, headers=headers)
+        links = list(set(links))  #deleting duplicated links
+        elements = dict()
         for link in links:
-            elements.extend(partition_html(url=link, ssl_verify=ssl_verify))
+            docs = partition_html(url=link, ssl_verify=ssl_verify, headers=headers)
+            if link not in elements.keys():
+                elements[link] = docs
+            else:
+                elements[link].extend(docs)
         return elements
     else:
-        elements = partition_html(url=url, ssl_verify=ssl_verify)
-        return elements
+        elements = partition_html(url=url, ssl_verify=ssl_verify, headers=headers)
+        return {url: elements}
+
 
 if __name__=="__main__":
-    base_url = "https://aipex.technology"
+    base_url = "https://lenalondonphoto.com/"
 
     t = time()
     res_default = split_webpage_into_documents(base_url, ssl_verify=False)

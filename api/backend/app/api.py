@@ -17,26 +17,42 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 import shutil
 
-
 backend_dir = Path(__file__).parent.parent
 docstalks_dir = Path(__file__).parent.parent.parent.parent
 templates_dir = os.path.join(docstalks_dir, 'web/frontend/templates/')
-
 sys.path.append(str(backend_dir))
 sys.path.append(str(docstalks_dir))
 sys.path.append(templates_dir)
 
-
-print(f"templates_dir: {templates_dir}")
-
-
 from src.config import CLIENT_ID, CLIENT_SECRET
-
 from docstalks.config import load_config 
+from docstalks.dbconnector import (add_files_to_qdrant,
+                                   initialize_qdrant_client,)
+from docstalks.utils import (split_webpage_into_documents,
+                             create_document_from_url,)
 from rag_web import embedding_model, retriever, llm, config
-
 from fastapi.templating import Jinja2Templates
+from sentence_transformers import SentenceTransformer
+from qdrant_client import models
 
+
+config = load_config("config.yaml")
+embedding_model = SentenceTransformer(config['embedding_model_name'])
+use_text_window = config['use_text_window']
+chunk_length = config['chunk_length']
+db_host = config['db_host']
+db_port = config['db_port']
+
+
+def init_qdrant(config, db_host, db_port):
+    qdrant_client, collection_name = initialize_qdrant_client(
+        embedding_model=embedding_model,
+        collection_name=config['collection_name'],
+        distance=models.Distance.COSINE,
+        # replace http with https in prod with ssl
+        url=f"http://{db_host}:{db_port}", 
+    )
+    return qdrant_client, collection_name
 
 app = FastAPI()
 
@@ -77,10 +93,11 @@ app.mount(
 )
 
 
-@app.get("/rag/")
+@app.get("/rag")
 async def read_item(question: Union[str, None] = None):
-    query_embedding = embedding_model.encode(text=question)
+    query_embedding = embedding_model.encode(question)
     context, sources = retriever.retrieve(query_embedding, limit=config['limit'])
+    print(f"context: {context}")
     user_message, system_message = llm.generate_llm_input(
         question=question, 
         context=context,)
@@ -94,15 +111,15 @@ async def process_pdf(file_path: str):
     # For example, extract text, convert to images, etc.
     from time import sleep
     sleep(3)
-    pass
+
 
 @app.get("/")
 async def read_index():
     return {"message": "Go to /static/index.html to upload PDF files"}
 
 
-@app.post("/upload-pdf/")
-async def upload_pdf(files: List[UploadFile] = File):
+@app.post("/upload-pdf")
+async def upload_pdf(files: List[UploadFile]):  # = File):
     
     save_dir = os.path.join(backend_dir, "media")
     if not os.path.exists(save_dir):
@@ -119,7 +136,40 @@ async def upload_pdf(files: List[UploadFile] = File):
         await process_pdf(file_location)
         # os.remove(file_location)  # Clean up the file after processing
         print(2)
-    return {"info": "PDF files processed successfully"}
+    return {"info": "PDF files uploaded successfully"}
 
 
+@app.post("/upload-url/")
+async def upload_link(url: str,
+                      recursive: bool = False,
+                      ssl_verify: bool = False,
+                      ):
+    try:
+        qdrant_client, collection_name = init_qdrant(config, db_host, db_port)
+    except Exception as e:
+        return {"Init database error ": str(e)}
+    try:
+        documents_dict = split_webpage_into_documents(url, recursive, ssl_verify)
+        print(f"Number of files in the uploaded data: {len(documents_dict.keys())}")
+        flist = []
 
+        from tqdm import tqdm
+        
+        for key in tqdm(documents_dict.keys()):
+            if len(documents_dict[key]) > 0:
+                document = create_document_from_url(
+                    filename=(documents_dict[key]), 
+                    config=config,
+                    chunk_length=150, 
+                    embedding_model=embedding_model,
+                    methods=config['methods'],
+                )
+                flist.append(document)
+
+        add_files_to_qdrant(
+            flist, config, 
+            qdrant_client, collection_name
+        )
+        return {"info": "url data was uploaded successfully"}
+    except Exception as e:
+        return {"Adding url data error": str(e)}

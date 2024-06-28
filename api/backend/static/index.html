@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload PDF</title>
+</head>
+<body>
+    <h1>Upload PDF Files</h1>
+    <form id="uploadForm">
+        <input type="file" id="fileInput" name="files" multiple accept="application/pdf">
+        <button type="button" onclick="uploadFiles()">Upload</button>
+    </form>
+
+    <script>
+        async function uploadFiles() {
+            const form = document.getElementById('uploadForm');
+            const formData = new FormData(form);
+            try {
+                const response = await fetch('http://127.0.0.1:8000/upload-pdf/', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+                alert(result.info);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to upload files');
+            }
+        }
+    </script>
+</body>
+</html>

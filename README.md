@@ -17,6 +17,8 @@ docker run -d --rm -p 6333:6333 -p 6334:6334 \
 ```
 Database will be up and running in detach mode, it means it will work in the backgroudn mode (if you want it running in the attached mode when you see all logs in your terminal, just delete flag: **-d** from the command above.
 
+**You can open Qdrant UI with http://localhost:6333/dashboard**
+
 *Some usefull docker commands:*
 ```
 docker ps                           # show list of running containers

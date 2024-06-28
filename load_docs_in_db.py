@@ -4,7 +4,11 @@
 from docstalks.utils import (convert_text_to_embedding,
                              stream_text,
                              create_document,
-                             print_color,)
+                             print_color,
+                             split_webpage_into_documents,
+                             read_url_in_document,
+                             create_document_from_url,
+                             )
 from docstalks.dbconnector import (initialize_qdrant_client,
                                    add_document_to_qdrant_db,
                                    search_in_qdrant_db,)
@@ -53,56 +57,96 @@ def init_qdrant(config):
     return qdrant_client, collection_name
 
 
-def add_to_qdrant(flist,
-                  embedding_model,
-                  config, 
-                  qdrant_client, 
-                  collection_name: str = "",
-                  ):
-    for filename in tqdm(flist):
-        try:
-            document = create_document(
-                filename=filename, 
-                config=config,
-                chunk_length=150, 
-                embedding_model=embedding_model,
-                methods=config['methods'],
-            )
-            if len(collection_name) == 0:
-                collection_name = config['collection_name']
+def add_files_to_qdrant(flist,
+                        config, 
+                        qdrant_client, 
+                        collection_name: str,):
+    if len(collection_name) == 0:
+        collection_name = config['collection_name']
+
+    for doc in tqdm(flist):
+        try:    
             add_document_to_qdrant_db(
-                document=document, 
+                document=doc,
                 client=qdrant_client,
                 collection_name=collection_name, 
                 use_text_window=config['use_text_window'],
                 methods=config['methods'],
             )
         except Exception as e:
-            print(f"The file was't added to the database: {filename}")
+            print(f"A document was't uploaded..")
             print(f"Exception: {e}")
+
 
 
 if __name__=="__main__":
     parser = ArgumentParser()
     parser.add_argument(
+        "--type", 
+        choices=['path', 'url'],
+        type=str, 
+        # default='path',
+        default='url',
+        # required=True,
+        help="Type of the data source",
+    )
+    parser.add_argument(
         "--source", 
         type=str, 
-
         # required=True,
-        default="/Users/eugene/Desktop/SoftTeco/danswer/data-softteco/company profiles/",
-
-        help="Path to documents",
+        # default="/Users/eugene/Desktop/SoftTeco/danswer/data-softteco/company profiles/",
+        default='https://lenalondonphoto.com/', #"/Users/eugene/Desktop/SoftTeco/danswer/data-softteco/company profiles/",
+        help="Path to the documents",
     )
     args = parser.parse_args()
-    source = args.source 
+    soruce_type = args.type
+    source = args.source
 
-    # If Source is path to a folder with PDFs:
-    fnames = os.listdir(source)
-    flist = [os.path.join(source, fname) for fname in fnames]
-    print(f"Number of files in the uploaded data: {len(flist)}")
 
     qdrant_client, collection_name = init_qdrant(config)
 
-    add_to_qdrant(flist, embedding_model, config, 
-                  qdrant_client, collection_name)
-    
+
+    # If Source is Path to a folder with PDFs:
+    if soruce_type == 'path':
+        fnames = os.listdir(source)[:3]
+        print(f"Number of files to upload into the database: {len(fnames)}")
+        flist = []
+        for fname in fnames:
+            try:
+                filename = os.path.join(source, fname)
+                document = create_document(
+                    filename=filename, 
+                    config=config,
+                    chunk_length=150, 
+                    embedding_model=embedding_model,
+                    methods=config['methods'],
+                )
+                flist.append(document)
+            except Exception as e:
+                print(f"The file was't added to the database: {filename}")
+                print(f"Exception: {e}")
+        add_files_to_qdrant(
+            flist, config, qdrant_client, 
+            collection_name
+        )
+        
+    # If Source is URL:
+    elif soruce_type == 'url':
+        documents_dict = split_webpage_into_documents(url=source, recursive=True, ssl_verify=False)
+        print(f"Number of files in the uploaded data: {len(documents_dict.keys())}")
+        flist = []
+        for key in tqdm(documents_dict.keys()):
+            if len(documents_dict[key]) > 0:
+                document = create_document_from_url(
+                    filename=(documents_dict[key]), 
+                    config=config,
+                    chunk_length=150, 
+                    embedding_model=embedding_model,
+                    methods=config['methods'],
+                )
+                flist.append(document)
+
+        add_files_to_qdrant(
+            flist, config, qdrant_client, 
+            collection_name
+        )

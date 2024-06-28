@@ -70,6 +70,27 @@ def initialize_qdrant_client(embedding_model: str = None,
     return qdrant_client, collection_name
 
 
+def add_files_to_qdrant(flist,
+                        config, 
+                        qdrant_client, 
+                        collection_name: str,):
+    if len(collection_name) == 0:
+        collection_name = config['collection_name']
+
+    for doc in flist:
+        try:    
+            add_document_to_qdrant_db(
+                document=doc,
+                client=qdrant_client,
+                collection_name=collection_name, 
+                use_text_window=config['use_text_window'],
+                methods=config['methods'],
+            )
+        except Exception as e:
+            print(f"A document was't uploaded..")
+            print(f"Exception: {e}")
+
+
 def add_document_to_qdrant_db(document,
                               client,
                               collection_name,
@@ -86,13 +107,25 @@ def add_document_to_qdrant_db(document,
             doc.metadata['texts'] = document.metadata['windows'][i]
         else:
             doc.metadata['texts'] = document.metadata['texts'][i]
+
+        # keep only needed required keys
+        metadata = deepcopy(doc.metadata)
+        metadata['text'] = metadata['texts']
+        del metadata['texts']
+        metadata['text_window'] = metadata['windows'][i]
+        del metadata['windows']
+        if 'summary' in methods:
+            metadata['summary'] = metadata['summaries']
+            del metadata['summaries']
+        metadata['uuid'] = metadata['uuid'][i]
+
         client.upsert(
             collection_name=collection_name,
             points=[
                 models.PointStruct(
                     id=doc.metadata['uuid'][i],
                     vector=doc.embeddings[i],
-                    payload=doc.metadata,
+                    payload=metadata,
                 ),
             ],
         )
