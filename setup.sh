@@ -17,7 +17,6 @@ sudo apt-get install docker-ce docker-ce-cli containerd.io docker-buildx-plugin 
 # Install poppler
 echo "Installing poppler"
 echo ""
-
 git clone https://gitlab.freedesktop.org/poppler/poppler.git
 cd poppler
 git checkout poppler-0.89.0
@@ -48,7 +47,6 @@ cd ../../
 # Install tesseract
 echo "Installing tesseract"
 echo ""
-
 sudo port install autoconf \
                   automake \
                   libtool \
@@ -64,9 +62,9 @@ make training
 sudo make install training-install
 
 # Install python venv module 
-apt install python3.12-venv
+apt install python3-venv
 python3 -m venv venv
-source venv/bin/activate
+source ./venv/bin/activate
 
 # Install packages
 pip3 install -r requirements-prod.txt

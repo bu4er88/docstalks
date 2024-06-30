@@ -21,8 +21,8 @@ import yaml
 from pathlib import Path
 import sys
 
-base_dir = Path(__file__).parent
-sys.path.append(str(base_dir))
+base_dir = str(Path(__file__).parent)
+sys.path.append(base_dir)
 config_path = os.path.join(base_dir, "config.yaml")
 
 config = Config(config_name=config_path).config
@@ -34,7 +34,7 @@ retriever = QdrantDBCRetriever(config)
 llm = LLM(
     config=config, 
     chatbot_name=bot_name,
-    prompts_path="/Users/eugene/Desktop/docstalks/docstalks/chat/prompts.yaml"
+    prompts_path=os.path.join(base_dir, "chat/prompts.yaml")
 )
 
 

@@ -56,17 +56,18 @@ class EmbeddingModel:
 
 class QdrantDBCRetriever:
     """
-    method: texts / summaries
+    method: text / summaries
     """
     def __init__(self, config, ) -> None:
         self.collection_name = config['collection_name']
         self.qdrant_client = QdrantClient(host=config['db_host'], port=config['db_port'])
     
-    def retrieve(self, embedding, limit=10):
+    def retrieve(self, embedding, limit, query_filter):
         results = self.qdrant_client.search(
             collection_name=self.collection_name,
             query_vector=embedding,
-            limit=limit
+            limit=limit,
+            query_filter=query_filter,
         )
         context = [f"Source: {res.payload["filename"]}\n{res.payload["text"].strip()}" for res in results]
         context = '\n\n'.join(context)
@@ -134,7 +135,7 @@ def read_pdf_in_document(file: str,
     Args:
         file: string contains path to the file.
         method: 
-            'standard' - for reading and naive spliting texts;
+            'standard' - for reading and naive spliting text;
             'recursive' - for reading and recursive splitting by carracrs.
     Returns:
         Document or List[Document,]
@@ -502,31 +503,6 @@ def collect_text_from_partition_html(documents: list):
         except:
             return ''
 
-
-# def split_webpage_into_documents(url: str, recursive: bool = False, ssl_verify: bool = False):
-#     headers = {
-#     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
-#     'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-#     'Accept-Language': 'en-US,en;q=0.5'
-#     }
-#     if recursive:
-#         links = get_links(url=url, verify=ssl_verify, headers=headers)
-#         links = list(set(links))  #deleting duplicated links
-#         elements = dict()
-#         for link in links:
-#             result = partition_html(url=link, ssl_verify=ssl_verify, headers=headers)
-#             text = collect_text_from_partition_html(documents=result)
-#             if link not in elements.keys():
-#                 elements[link] = text
-#             else:
-#                 elements[link].extend(text)
-#         for key in elements.keys():
-#             if len(elements[key]) > 1:
-#                 elements[key] = '\n'.join(elements[key])
-#         return elements
-#     else:
-#         elements = partition_html(url=url, ssl_verify=ssl_verify, headers=headers)
-#         return {url: elements}
 
 def split_webpage_into_documents(url: str, recursive: bool = False, ssl_verify: bool = False):
     headers = {

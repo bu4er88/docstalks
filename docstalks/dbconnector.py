@@ -32,19 +32,11 @@ def check_collection_exists_in_qdrant(client,
     collections_list = client.get_collections().collections
     collections_names = [collection.name for collection in collections_list]
     if collection_name in collections_names:
-        while collection_name in collections_names:
-            delete = ''
-            while delete not in ['Yes', 'y', 'yes', 'No', 'n', 'no']:
-                print_color(f"Collection '{collection_name}' is alread exists!\n\
-Do you want to delete the existing colletion and recreate \
-a new one with the same name?", 'red')
-                delete = input("Yes/no: ")
-            if delete in ['Yes', 'y', 'yes']:
-                client.delete_collection(collection_name=collection_name)
-                collections_names.remove(collection_name)
-            elif delete in ['No', 'n', 'no']:
-                collection_name = str(input("Provide a new collection name: "))
-            
+        print_color(f"Collection '{collection_name}' already exists!", 'green')
+    else:
+        print_color(f"Collection '{collection_name}' was not found! Collection name will be 'default'.", 'red')
+        collection_name = "default"
+        # collection_name = str(input("Provide a new collection name: "))
     create_qdrant_collection(
         client=client, 
         collection_name=collection_name,
@@ -61,6 +53,7 @@ def initialize_qdrant_client(embedding_model: str = None,
                              ):
     qdrant_client = QdrantClient(url=url)
     embedding_lenght = embedding_model.encode('test').shape[0]
+    ### TODO: not sure whethere it's useful or not
     collection_name = check_collection_exists_in_qdrant(
         client=qdrant_client,
         collection_name=collection_name,
@@ -69,6 +62,21 @@ def initialize_qdrant_client(embedding_model: str = None,
     )
     return qdrant_client, collection_name
 
+
+def connect_to_qdrant_client(embedding_model: str,
+                             collection_name: str,
+                             distance=models.Distance.COSINE,
+                             url: str ="http://localhost:6333",
+                             ):
+    qdrant_client = QdrantClient(url=url)
+    embedding_lenght = embedding_model.encode('test').shape[0]
+    collection_name = check_collection_exists_in_qdrant(
+        client=qdrant_client,
+        collection_name=collection_name,
+        embedding_lenght=embedding_lenght,
+        distance=distance,
+    )
+    return qdrant_client, collection_name
 
 def add_files_to_qdrant(flist,
                         config, 

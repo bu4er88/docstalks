@@ -40,8 +40,11 @@ config = load_config("config.yaml")
 embedding_model = SentenceTransformer(config['embedding_model_name'])
 use_text_window = config['use_text_window']
 chunk_length = config['chunk_length']
+server_host = config['server_host']
+server_port = config['server_port']
 db_host = config['db_host']
 db_port = config['db_port']
+
 
 
 def init_qdrant(config, db_host, db_port):
@@ -53,6 +56,7 @@ def init_qdrant(config, db_host, db_port):
         url=f"http://{db_host}:{db_port}", 
     )
     return qdrant_client, collection_name
+
 
 app = FastAPI()
 
@@ -94,13 +98,19 @@ app.mount(
 
 
 @app.get("/rag")
-async def read_item(question: Union[str, None] = None):
+async def read_item(question: Union[str, None] = None, 
+                    filter: Union[dict, None] = None,
+                    ):
     query_embedding = embedding_model.encode(question)
-    context, sources = retriever.retrieve(query_embedding, limit=config['limit'])
+    ### TODO: add filtering feature for filtering results
+    context, sources = retriever.retrieve(
+        query_embedding, limit=config['limit'], query_filter=filter,
+    )
     print(f"context: {context}")
     user_message, system_message = llm.generate_llm_input(
         question=question, 
-        context=context,)
+        context=context,
+    )
     answer = llm.openai_answer(user_message, system_message)
     return {"answer": answer, "sources": sources}
 
@@ -173,3 +183,4 @@ async def upload_link(url: str,
         return {"info": "url data was uploaded successfully"}
     except Exception as e:
         return {"Adding url data error": str(e)}
+    

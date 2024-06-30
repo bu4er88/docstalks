@@ -1,16 +1,20 @@
+# Server
+server_host: 0.0.0.0
+server_port: 8000
+
 # Qdrant Database Settings
-collection_name: test_collection #llangchain_collection small_texts default_summaries
+collection_name: default
 db_host: localhost
 db_port: 6333
+limit: 30
 
-# LLM Settings
+# OpenAI API KEY
 openai_api_key: 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
 
 # RAG Settings
 embedding_model_name: intfloat/e5-base-v2
 use_text_window: True
 chunk_length: 150
-limit: 30
 methods: ['summaries', 'classes', 'keywords']
 
 # Retriever Settings
