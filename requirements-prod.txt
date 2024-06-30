@@ -1,0 +1,11 @@
+uvicorn fastapi 
+itsdangerous 
+authlib 
+qdrant_client 
+langchain_core 
+"unstructured[all-docs]" 
+psutil 
+langchain_text_splitters 
+langchain_community 
+sentence_transformers 
+openai
