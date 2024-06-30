@@ -1,3 +1,18 @@
+# Docker install
+echo "Installing Docker"
+echo ""
+sudo apt-get update
+sudo apt-get install ca-certificates curl
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+sudo chmod a+r /etc/apt/keyrings/docker.asc
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
+  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt-get update
+
+# Install poppler
 echo "Installing poppler"
 echo ""
 
@@ -28,6 +43,7 @@ pip install python-poppler
 
 cd ../../
 
+# Install tesseract
 echo "Installing tesseract"
 echo ""
 
@@ -45,4 +61,11 @@ cd tesseract
 make training
 sudo make install training-install
 
+# Install python venv module 
+apt install python3.12-venv
+python3 -m venv venv
+source venv/bin/activate
+
+# Install packages
+pip3 install -r requirements-prod.txt
 
