@@ -69,3 +69,7 @@ source venv/bin/activate
 # Install packages
 pip3 install -r requirements-prod.txt
 
+# Run Qdrant DB with Docker
+docker run -d --rm -p 6333:6333 -p 6334:6334 \
+    -v $(pwd)/qdrant_storage:/qdrant/storage:z \
+    qdrant/qdrant
