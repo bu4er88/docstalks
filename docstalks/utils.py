@@ -22,7 +22,7 @@ class Config:
 
     def __init__(self, config_name: str) -> None:
         self.config = load_config(config_name)
-        # self.embedding_model_name = self.config['embedding_model_name'] #"config.yaml")
+        # self.embedding_model = self.config['embedding_model'] #"config.yaml")
         # self.collection_name = self.config['collection_name'] #"config.yaml")
         # self.db_host = self.config['db_host']
         # self.db_port = self.config['db_port']
@@ -30,7 +30,7 @@ class Config:
     def __str__(self) -> str:
         print("""Config:
               confing_name: {config_name}
-              self.embedding_model_name: {self.embedding_model_name}
+              self.embedding_model: {self.embedding_model}
               self.collection_name: {self.collection_name}
               """)
         return
@@ -43,8 +43,8 @@ class Config:
 class EmbeddingModel:
 
     def __init__(self, config) -> None:
-        self.embedding_model_name = config['embedding_model_name']
-        self.embedding_model = SentenceTransformer(self.embedding_model_name)
+        self.embedding_model = config['embedding_model']
+        self.embedding_model = SentenceTransformer(self.embedding_model)
       
     def encode(self, text):
         return self.embedding_model.encode(

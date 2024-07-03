@@ -6,15 +6,16 @@ server_port: 8000
 collection_name: default
 db_host: localhost
 db_port: 6333
-limit: 30
+limit: 3
 
 # OpenAI API KEY
 openai_api_key: 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
 
 # RAG Settings
-embedding_model_name: intfloat/e5-base-v2
+embedding_model: intfloat/e5-base-v2
 use_text_window: True
-chunk_length: 150
+chunk_length: 512
+overlap: 100  # it is not used at the moment: default is 10% of chunk_length!
 methods: ['summaries', 'classes', 'keywords']
 
 # Retriever Settings

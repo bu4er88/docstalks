@@ -1,6 +1,4 @@
-# from tqdm import tqdm
-# from typing import Optional, List, Tuple
-# import torch 
+import torch 
 from docstalks.utils import (convert_text_to_embedding,
                              stream_text,
                              create_document,
@@ -25,20 +23,15 @@ from tqdm import tqdm
 from openai import OpenAI
 from docstalks.config import load_config 
 from argparse import ArgumentParser
-
 import os
+
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
-
-
-# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-# print(f"device: {device}")
 
 config = load_config("config.yaml")
 
 embedding_model = SentenceTransformer(
     config['embedding_model_name']
 )
-
 use_text_window = config['use_text_window']
 chunk_length = config['chunk_length']
 

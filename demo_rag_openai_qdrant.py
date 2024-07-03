@@ -5,9 +5,9 @@ from docstalks.utils import (convert_text_to_embedding,
                              LLM,
                              EmbeddingModel,
                              QdrantDBCRetriever,)
-from docstalks.dbconnector import (initialize_qdrant_client,
+from docstalks.dbconnector import (connect_to_qdrant,
                                    add_document_to_qdrant_db,
-                                   search_in_qdrant_db,)
+                                   search_in_qdrant,)
 from chat.llm import (read_yaml_to_dict,
                       generate_prompt_template,
                       openai_answer,)
@@ -38,7 +38,7 @@ if __name__=='__main__':
     while True:
         question = input("Ask your question: ")
         query_embedding = embedding_model.encode(text=question)
-        context, sources = retriever.retrieve(query_embedding, limit=limit)
+        context, sources = retriever.retrieve(query_embedding, limit=limit, query_filter=None)
         user_message, system_message = llm.generate_llm_input(
             question=question, 
             context=context,
