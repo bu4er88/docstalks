@@ -26,8 +26,7 @@ sys.path.append(templates_dir)
 
 from src.config import CLIENT_ID, CLIENT_SECRET
 from docstalks.config import load_config 
-from docstalks.dbconnector import (add_files_to_qdrant,
-                                   connect_to_qdrant,)
+from docstalks.dbconnector import QdrandClient
 from docstalks.utils import (split_webpage_into_documents,
                              create_document_from_url,)
 from rag_web import embedding_model, retriever, llm, config
@@ -85,9 +84,14 @@ app.mount(
 )
 
 
+@app.get("/")
+async def read_index():
+    return {"message": "ask question with /rag/?question=<your question>"}
+
+
 @app.get("/rag")
 async def read_item(question: Union[str, None] = None, 
-                    filter: Union[dict, None] = None,
+                    filter: Union[str, None] = None,
                     ):
     query_embedding = embedding_model.encode(question)
     ### TODO: add filtering feature for filtering results
@@ -110,12 +114,7 @@ async def process_pdf(file_path: str):
     sleep(3)
 
 
-@app.get("/")
-async def read_index():
-    return {"message": "ask question with /rag/?question=<your question>"}
-
-
-@app.post("/upload-pdf")
+@app.post("/upload-pdf/")
 async def upload_pdf(files: List[UploadFile]):  # = File):
     
     save_dir = os.path.join(backend_dir, "media")
@@ -138,33 +137,36 @@ async def upload_pdf(files: List[UploadFile]):  # = File):
 
 @app.post("/upload-url/")
 async def upload_link(url: str,
+                      collection_name: str = '',
                       recursive: bool = False,
                       ssl_verify: bool = False,
                       ):
     try:
-        qdrant_client, collection_name = connect_to_qdrant(config, embedding_model)
-        if not qdrant_client:
-            return {"connect_to_qdrant": "error", "collection_name": collection_name}
+        qdrant_client = QdrandClient(config)
     except Exception as e:
-        return {"Init database error ": str(e)}
+        return {"result ": f"failed database connection: {e}"}
     try:
         documents_dict = split_webpage_into_documents(url, recursive, ssl_verify)
         print(f"Number of files in the uploaded data: {len(documents_dict.keys())}")
+
+        collection_name = collection_name \
+            if collection_name != '' \
+            else config['collection_name']
         
         for key in tqdm(documents_dict.keys()):
             if len(documents_dict[key]) > 0:
                 document = create_document_from_url(
                     filename=(documents_dict[key]), 
                     config=config,
-                    chunk_length=150, 
                     embedding_model=embedding_model,
                     methods=config['methods'],
                 )
                 if not isinstance(document, list):
                     document = [document]
-                add_files_to_qdrant(
-                    document, config, qdrant_client, 
-                    collection_name,
+                qdrant_client.upsert_document(
+                    document=document, 
+                    collection_name=collection_name, 
+                    methods=config['methods']
                 )
         return {"result": "success"}
     except Exception as e:

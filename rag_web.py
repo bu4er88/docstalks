@@ -5,9 +5,7 @@ from docstalks.utils import (convert_text_to_embedding,
                              LLM,
                              EmbeddingModel,
                              QdrantDBCRetriever,)
-from docstalks.dbconnector import (connect_to_qdrant,
-                                   add_document_to_qdrant_db,
-                                   search_in_qdrant,)
+from docstalks.dbconnector import QdrandClient
 from chat.llm import (read_yaml_to_dict,
                       generate_prompt_template,
                       openai_answer,)

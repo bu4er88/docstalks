@@ -57,10 +57,10 @@ if __name__=='__main__':
         response = ollama.chat(model='llama3', messages=[
           {
             'role': 'system',
-            'content': "You are AI assistant answering the Question using only the provided Context.\
-        Do not try to make up. Answer always in Russian.\
-        If context in another language you do always translate you answer in Russian.\
-        Your answer must be as short and clear as it possible. Use bullet points and stucturize your answer to sound professional.",
+            'content': "You are AI assistant answers the Question using only provided Context. \
+Do not try to make up your answer. You must answer in Englush always, even if the context not in English. \
+Your answer must be as short, clear and consice as much as possible. \
+Use bullet points and stucturize your answer to sounds formal and professional.",
           },
           {
             'role': 'user',
@@ -77,6 +77,3 @@ if __name__=='__main__':
         for i, src in enumerate(sources):
             print(f"[{i}] {src}")
         print()
-
-
-

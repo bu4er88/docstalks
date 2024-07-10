@@ -8,32 +8,118 @@ from docstalks.utils import print_color
 from copy import deepcopy
     
 
-def connect_to_qdrant(config, embedding_model):
-    qdrant_client, collection_name = connect_to_qdrant_client(
-        config=config,
-        embedding_model=embedding_model,
-        distance=models.Distance.COSINE,
-    )
-    return qdrant_client, collection_name
+class QdrandClient:
+    def __init__(self, host, port):
+        self.host = host
+        self.port = port
+        self.client = QdrantClient(url=f"{self.host}:{self.port}")
+
+    def __str__(self):
+        return f"QdrantClient(host={self.host}, port={self.port}, \
+    embedding_model_name={self.client.embedding_model_name})"
+
+    def get_collections_list(self):
+        try:
+            collections = self.client.get_collections().collections
+            return [collection.name for collection in collections]
+        except Exception as e:
+            return {"result": "failed get collection list: {e}"}
+        
+    def create_collection(self, collection_name, embedding_model,
+                          distance=models.Distance.COSINE):
+        try:
+            if collection_name not in self.get_collections_list():
+                self.client.create_collection(
+                    collection_name=collection_name,
+                    vectors_config=VectorParams(
+                        size=embedding_model.encode('test').shape[0], 
+                        distance=distance))
+            return {"result": "collection created: {collection_name}"}
+        except Exception as e:
+            return {"result": "failed create collection {collection_name}: {e}"}
+    
+    def delete_collection(self, collection_name):
+        try:
+            if collection_name not in self.get_collections_list():
+                self.client.delete_collection(collection_name=collection_name)
+            return {"result": f"collection deleted: {collection_name}"}
+        except Exception as e:
+            return {"result": f"failed delete collection {collection_name}: {e}"}
+        
+    def upsert_document(self, 
+                        document, 
+                        collection_name,
+                        methods='default', 
+                        use_text_window=False
+                        ):
+        try:
+            parts = len(document.metadata['texts'])
+            for i in range(parts):
+                doc = deepcopy(document)
+                if methods != 'default':
+                    for method in methods:
+                        doc.metadata[method] = document.metadata[method][i]
+                if use_text_window:
+                    doc.metadata['texts'] = document.metadata['windows'][i]
+                else:
+                    doc.metadata['texts'] = document.metadata['texts'][i]
+                # keep only needed required keys
+                metadata = deepcopy(doc.metadata)
+                metadata['text'] = metadata['texts']
+                del metadata['texts']
+                metadata['text_window'] = metadata['windows'][i]
+                del metadata['windows']
+                if 'summary' in methods:
+                    metadata['summary'] = metadata['summaries']
+                    del metadata['summaries']
+                metadata['uuid'] = metadata['uuid'][i]
+
+                # upsert data
+                self.client.upsert(
+                    collection_name=collection_name,
+                    points=[
+                        models.PointStruct(
+                            id=doc.metadata['uuid'][i],
+                            vector=doc.embeddings[i],
+                            payload=metadata)
+                        ]
+                    )
+        except Exception as e:
+            return {"result": "failed upsert document: {e}"}
+
+    def search(self, query_embedding: list, 
+               collection_name: str, limit: int = 5):
+        try:
+            return self.client.search(
+                collection_name, query_embedding, limit)
+        except Exception as e:
+            return {"result": "search error: {e}"}
+    
+    def close_connection(self):
+        try:
+            self.client.close()
+            return {"result": "connection was closed"}
+        except Exception as e:
+            return {"result": "filed closing connection: {e}"}
 
 
-def connect_to_qdrant_client(config,
-                             embedding_model,
-                             distance=models.Distance.COSINE,
-                             ):
-    try:
-        url = f"{config['db_host']}:{config['db_port']}"
-        qdrant_client = QdrantClient(url=url)
-        collection_name = check_collection_exists_in_qdrant(
-            client=qdrant_client,
-            collection_name=config['collection_name'],
-            embedding_lenght=embedding_model.encode('test').shape[0],
-            distance=distance,
-        )
-        return qdrant_client, collection_name
-    except Exception as e:
-        print(f"Failed qdrant connection: {e}")
-        return False, collection_name
+# def connect_qdrant_host(config, 
+#                         embedding_model,
+#                         distance=models.Distance.COSINE
+#                         ):
+#     try:
+#         url = f"{config['db_host']}:{config['db_port']}"
+#         qdrant_client = QdrantClient(url=url)
+        # collection_name = check_collection_exists_in_qdrant(
+#             client=qdrant_client,
+#             collection_name=config['collection_name'],
+#             embedding_lenght=embedding_model.encode('test').shape[0],
+#             distance=distance,
+#         )
+#         return qdrant_client, collection_name
+#     except Exception as e:
+#         print(f"Failed qdrant connection: {e}")
+#         return False, collection_name
 
 
 def check_collection_exists_in_qdrant(client, 
@@ -88,73 +174,23 @@ def delete_qdrant_collection(client,
         return False
     
 
-def add_files_to_qdrant(flist,
-                        config, 
-                        qdrant_client, 
-                        collection_name: str,):
-    if len(collection_name) == 0:
-        collection_name = config['collection_name']
-    for doc in flist:
-        try:    
-            add_document_to_qdrant_db(
-                document=doc,
-                client=qdrant_client,
-                collection_name=collection_name, 
-                use_text_window=config['use_text_window'],
-                methods=config['methods'],
-            )
-        except Exception as e:
-            return {"result": "A document was't uploaded: {e}"}
+# def add_files_to_qdrant(flist,
+#                         config, 
+#                         qdrant_client, 
+#                         collection_name: str,):
+#     if len(collection_name) == 0:
+#         collection_name = config['collection_name']
+#     for doc in flist:
+#         try:    
+#             add_document_to_qdrant_db(
+#                 document=doc,
+#                 client=qdrant_client,
+#                 collection_name=collection_name, 
+#                 use_text_window=config['use_text_window'],
+#                 methods=config['methods'],
+#             )
+#         except Exception as e:
+#             return {"result": "A document was't uploaded: {e}"}
 
 
-def add_document_to_qdrant_db(document,
-                              client,
-                              collection_name,
-                              use_text_window: bool = False, 
-                              methods='default',
-                              ):
-    # check if the Document type belongs to the llangchain
-    for i in range(len(document.metadata['texts'])):
-        doc = deepcopy(document)
-        if methods != 'default':
-            for method in methods:
-                doc.metadata[method] = document.metadata[method][i]
-        if use_text_window:
-            doc.metadata['texts'] = document.metadata['windows'][i]
-        else:
-            doc.metadata['texts'] = document.metadata['texts'][i]
 
-        # keep only needed required keys
-        metadata = deepcopy(doc.metadata)
-        metadata['text'] = metadata['texts']
-        del metadata['texts']
-        metadata['text_window'] = metadata['windows'][i]
-        del metadata['windows']
-        if 'summary' in methods:
-            metadata['summary'] = metadata['summaries']
-            del metadata['summaries']
-        metadata['uuid'] = metadata['uuid'][i]
-
-        client.upsert(
-            collection_name=collection_name,
-            points=[
-                models.PointStruct(
-                    id=doc.metadata['uuid'][i],
-                    vector=doc.embeddings[i],
-                    payload=metadata,
-                ),
-            ],
-        )
-
-
-def search_in_qdrant(query_vector: list, 
-                        client,
-                        collection_name: str, 
-                        limit: int = 5,
-                        ):
-    results = client.search(
-        collection_name=collection_name,
-        query_vector=query_vector,
-        limit=limit
-        )
-    return results

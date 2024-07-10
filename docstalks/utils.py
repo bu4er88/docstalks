@@ -13,9 +13,10 @@ from qdrant_client import QdrantClient
 from typing import Tuple
 import sys
 from pathlib import Path
-CURR_DIR = Path(__file__)
-sys.path.append(str(CURR_DIR))
+BASE_DIR = Path(__file__).parent.parent
+sys.path.append(str(BASE_DIR))
 from .config import load_config 
+import os
 
 
 class Config:
@@ -257,7 +258,7 @@ def get_separators(file_name: str) -> str:
 
 
 def add_texts_and_windows_to_document(document, chunk_length, overlap):
-    overlap = max(30, overlap)
+    overlap = max(chunk_length//10, overlap)
     text = document.text
     words = text.split()
     start = 0
@@ -365,18 +366,20 @@ def load_documents_with_llangchain(file_path,
 
 def create_document(filename: str, 
                     config: dict,
-                    chunk_length: int, 
                     embedding_model,
                     methods='default',
                     ):
     """
     method: 'texts / summaries'.
     """
-    document = read_pdf_in_document(filename)
+    document = read_pdf_in_document(
+        filename, chunk_size=config['chunk_length'], 
+        chunk_overlap=config['overlap']
+    )
     document = add_texts_and_windows_to_document(
         document=document, 
-        chunk_length=chunk_length, 
-        overlap=chunk_length//10,
+        chunk_length=config['chunk_length'], 
+        overlap=config['overlap'],
     )
     if methods=='default':
         llm = None
@@ -390,7 +393,7 @@ def create_document(filename: str,
                     models[method]= LLM(
                         config=config,
                         chatbot_name=method, 
-                        prompts_path='/Users/eugene/Desktop/docstalks/docstalks/chat/prompts.yaml'
+                        prompts_path=os.path.join(BASE_DIR, 'chat/prompts.yaml')
                     )
         else:
             raise (f"create_document(): variable methods is not valid: {methods}")
@@ -406,7 +409,6 @@ def create_document(filename: str,
 
 def create_document_from_url(filename: list, 
                             config: dict,
-                            chunk_length: int, 
                             embedding_model,
                             methods='default',
                             ):
@@ -416,8 +418,8 @@ def create_document_from_url(filename: list,
     document = read_url_in_document(filename)
     document = add_texts_and_windows_to_document(
         document=document, 
-        chunk_length=chunk_length, 
-        overlap=chunk_length//10,
+        chunk_length=config['chunk_length'], 
+        overlap=config['overlap'],
     )
     if methods=='default':
         llm = None
@@ -443,6 +445,11 @@ def create_document_from_url(filename: list,
     )
     document = add_uuid_to_document(document)
     return document
+
+
+def github_connector(url, token):
+    pass
+    # TODO: from unstructured import github
 
 
 def stream_text(input):

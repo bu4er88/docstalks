@@ -50,7 +50,7 @@ It runs the backend server. You can open it with the link http://127.0.0.1:8000/
 
 **Follow this template to use API:**
 ```
-http://127.0.0.1:8000/rag?<your-question>
+http://127.0.0.1:8000/rag/?<your-question>
 ```
 It returns output in JSON format:
 ```
